@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>Carga de Facturas</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #0f1117;
+    --surface: #181c27;
+    --surface2: #1e2333;
+    --border: rgba(255,255,255,0.08);
+    --accent: #4ade80;
+    --accent-dim: rgba(74,222,128,0.12);
+    --accent-border: rgba(74,222,128,0.3);
+    --text: #f0f2f5;
+    --muted: #6b7280;
+    --danger: #f87171;
+    --warning: #fbbf24;
+    --info: #60a5fa;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding-bottom: 2rem;
+  }
+
+  header {
+    padding: 1.25rem 1.25rem 1rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 10;
+  }
+
+  .logo {
+    width: 32px; height: 32px;
+    background: var(--accent-dim);
+    border: 1px solid var(--accent-border);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+
+  header h1 { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+  header p  { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+  .webhook-bar {
+    margin: 1rem 1.25rem 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+  }
+
+  .webhook-bar label { font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace; letter-spacing: 0.05em; display: block; margin-bottom: 4px; }
+  .webhook-bar input {
+    width: 100%;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-size: 12px;
+    font-family: 'DM Mono', monospace;
+    color: var(--info);
+    padding: 0;
+  }
+  .webhook-bar input::placeholder { color: var(--muted); }
+
+  .section { padding: 1.25rem 1.25rem 0; }
+
+  .capture-zone {
+    background: var(--surface);
+    border: 2px dashed var(--border);
+    border-radius: 16px;
+    min-height: 200px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .capture-zone.has-image {
+    border-style: solid;
+    border-color: var(--accent-border);
+    background: var(--surface2);
+  }
+
+  .capture-zone:active { background: var(--surface2); }
+
+  .capture-zone img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: 14px;
+    max-height: 280px;
+  }
+
+  .capture-icon { font-size: 40px; opacity: 0.4; }
+  .capture-label { font-size: 13px; color: var(--muted); text-align: center; line-height: 1.5; }
+  .capture-label strong { color: var(--text); font-weight: 500; }
+
+  input[type=file] { display: none; }
+
+  .btn {
+    display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+    width: 100%;
+    padding: 0.875rem 1rem;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #0a1a0e;
+  }
+  .btn-primary:active { transform: scale(0.98); background: #22c55e; }
+  .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+  .btn-secondary {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:active { background: var(--surface); }
+
+  .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid rgba(10,26,14,0.3);
+    border-top-color: #0a1a0e;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .status-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1rem 1.25rem;
+    font-size: 13px;
+    display: none;
+  }
+  .status-card.visible { display: block; }
+  .status-card.ok { border-color: var(--accent-border); background: var(--accent-dim); }
+  .status-card.err { border-color: rgba(248,113,113,0.3); background: rgba(248,113,113,0.08); }
+  .status-card.loading { border-color: rgba(96,165,250,0.3); background: rgba(96,165,250,0.08); }
+
+  .status-card h3 { font-size: 12px; font-weight: 600; margin-bottom: 0.5rem; letter-spacing: 0.03em; }
+  .status-card.ok h3 { color: var(--accent); }
+  .status-card.err h3 { color: var(--danger); }
+  .status-card.loading h3 { color: var(--info); }
+
+  .fields-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+  }
+
+  .field-item {
+    background: rgba(0,0,0,0.2);
+    border-radius: 8px;
+    padding: 0.5rem 0.625rem;
+  }
+  .field-item.full { grid-column: 1/-1; }
+  .field-label { font-size: 9px; color: var(--muted); font-family: 'DM Mono', monospace; letter-spacing: 0.06em; margin-bottom: 2px; }
+  .field-value { font-size: 12px; font-weight: 500; color: var(--text); word-break: break-word; }
+  .field-value.mono { font-family: 'DM Mono', monospace; font-size: 11px; }
+  .field-value.empty { color: var(--muted); font-style: italic; font-size: 11px; }
+
+  .field-edit {
+    width: 100%;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--accent-border);
+    outline: none;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    padding: 2px 0;
+  }
+
+  .divider { height: 1px; background: var(--border); margin: 1.25rem 0 0; }
+
+  .gap { height: 0.75rem; }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    font-family: 'DM Mono', monospace;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 500;
+  }
+  .tag-ok { background: var(--accent-dim); color: var(--accent); border: 1px solid var(--accent-border); }
+  .tag-err { background: rgba(248,113,113,0.12); color: var(--danger); border: 1px solid rgba(248,113,113,0.3); }
+
+  .instructions {
+    background: var(--surface2);
+    border-radius: 12px;
+    padding: 1rem;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+  .instructions strong { color: var(--text); }
+  .instructions code {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    background: rgba(255,255,255,0.05);
+    padding: 1px 5px;
+    border-radius: 4px;
+    color: var(--info);
+  }
+
+  .step-num {
+    display: inline-flex;
+    width: 18px; height: 18px;
+    background: var(--accent-dim);
+    color: var(--accent);
+    border-radius: 50%;
+    align-items: center; justify-content: center;
+    font-size: 10px;
+    font-weight: 600;
+    margin-right: 4px;
+    flex-shrink: 0;
+  }
+
+  .step-row { display: flex; align-items: flex-start; gap: 0; margin-bottom: 0.4rem; }
+
+  .toast {
+    position: fixed;
+    bottom: 1.5rem; left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--text);
+    color: var(--bg);
+    padding: 0.6rem 1.25rem;
+    border-radius: 24px;
+    font-size: 13px;
+    font-weight: 500;
+    transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+    white-space: nowrap;
+    z-index: 100;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🧾</div>
+  <div>
+    <h1>Carga de Facturas</h1>
+    <p>Extracción automática con IA → Excel OneDrive</p>
+  </div>
+</header>
+
+<!-- Webhook URL -->
+<div class="webhook-bar">
+  <label>WEBHOOK URL DE MAKE</label>
+  <input type="text" id="webhookUrl" placeholder="https://hook.eu2.make.com/xxxxxxxxxxxxxxxx" autocomplete="off" spellcheck="false"/>
+</div>
+
+<!-- Captura de foto -->
+<div class="section">
+  <div class="gap"></div>
+  <div class="capture-zone" id="captureZone" onclick="document.getElementById('fileInput').click()">
+    <div class="capture-icon" id="captureIcon">📷</div>
+    <div class="capture-label" id="captureLabel">
+      <strong>Tocá para sacar foto</strong><br>o elegir desde la galería
+    </div>
+    <img id="previewImg" style="display:none"/>
+  </div>
+  <input type="file" id="fileInput" accept="image/*" capture="environment"/>
+  <div class="gap"></div>
+  <button class="btn btn-primary" id="btnAnalyze" disabled onclick="analyzeInvoice()">
+    Analizar factura con IA
+  </button>
+</div>
+
+<!-- Estado / resultado -->
+<div class="section">
+  <div class="gap"></div>
+  <div class="status-card" id="statusCard">
+    <h3 id="statusTitle"></h3>
+    <div id="statusBody"></div>
+  </div>
+</div>
+
+<!-- Botón confirmar -->
+<div class="section" id="confirmSection" style="display:none">
+  <div class="gap"></div>
+  <button class="btn btn-primary" id="btnConfirm" onclick="sendToMake()">
+    ✓ Confirmar y enviar a Excel
+  </button>
+  <div class="gap"></div>
+  <button class="btn btn-secondary" onclick="resetAll()">Cargar otra factura</button>
+</div>
+
+<!-- Instrucciones Make -->
+<div class="section">
+  <div class="divider"></div>
+  <div class="gap"></div>
+  <div class="instructions">
+    <div style="font-size:11px; font-weight:600; color:var(--text); margin-bottom:0.6rem; letter-spacing:0.04em;">CÓMO CONFIGURAR EN MAKE</div>
+    <div class="step-row"><span class="step-num">1</span><span>En Make creá un escenario nuevo con trigger <code>Webhooks → Custom webhook</code></span></div>
+    <div class="step-row"><span class="step-num">2</span><span>Copiá la URL del webhook y pegala arriba</span></div>
+    <div class="step-row"><span class="step-num">3</span><span>Agregá un módulo <code>Microsoft Excel Online → Add a Row</code></span></div>
+    <div class="step-row"><span class="step-num">4</span><span>Mapeá los campos: <code>fecha</code>, <code>cuit</code>, <code>proveedor</code>, <code>neto</code>, <code>iva21</code>, <code>iva105</code>, <code>percIva</code>, <code>percIibbBa</code>, <code>percIibbCaba</code>, <code>total</code></span></div>
+    <div class="step-row"><span class="step-num">5</span><span>¡Listo! Cada factura confirmada agrega una fila en <strong>Compras 2026</strong></span></div>
+  </div>
+  <div class="gap"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
+let extractedData = null;
+let imageBase64 = null;
+
+const fileInput = document.getElementById('fileInput');
+const captureZone = document.getElementById('captureZone');
+const previewImg = document.getElementById('previewImg');
+const captureIcon = document.getElementById('captureIcon');
+const captureLabel = document.getElementById('captureLabel');
+const btnAnalyze = document.getElementById('btnAnalyze');
+const statusCard = document.getElementById('statusCard');
+const statusTitle = document.getElementById('statusTitle');
+const statusBody = document.getElementById('statusBody');
+const confirmSection = document.getElementById('confirmSection');
+
+fileInput.addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const result = ev.target.result;
+    imageBase64 = result.split(',')[1];
+    previewImg.src = result;
+    previewImg.style.display = 'block';
+    captureIcon.style.display = 'none';
+    captureLabel.style.display = 'none';
+    captureZone.classList.add('has-image');
+    btnAnalyze.disabled = false;
+    hideStatus();
+    confirmSection.style.display = 'none';
+    extractedData = null;
+  };
+  reader.readAsDataURL(file);
+});
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function hideStatus() {
+  statusCard.className = 'status-card';
+  statusCard.style.display = 'none';
+}
+
+function showStatus(type, title, bodyHtml) {
+  statusCard.className = `status-card visible ${type}`;
+  statusCard.style.display = 'block';
+  statusTitle.textContent = title;
+  statusBody.innerHTML = bodyHtml;
+}
+
+function fieldHtml(label, key, mono, full) {
+  const val = extractedData[key];
+  const isEmpty = val === null || val === undefined || val === '';
+  const cls = `field-item${full?' full':''}`;
+  const valCls = `field-value${mono?' mono':''}`;
+  return `<div class="${cls}">
+    <div class="field-label">${label}</div>
+    <input class="field-edit${mono?' mono':''}" data-key="${key}" value="${isEmpty?'':val}" placeholder="—"/>
+  </div>`;
+}
+
+async function analyzeInvoice() {
+  if (!imageBase64) return;
+
+  btnAnalyze.disabled = true;
+  btnAnalyze.innerHTML = '<div class="spinner"></div> Analizando...';
+  confirmSection.style.display = 'none';
+  showStatus('loading', 'LEYENDO FACTURA...', '<div style="font-size:12px;color:var(--info)">Claude está extrayendo los datos de la imagen.</div>');
+
+  const prompt = `Sos un asistente experto en leer facturas argentinas. Analizá esta imagen de factura y extraé los datos en formato JSON puro (sin markdown, sin texto extra, solo el JSON).
+
+Devolvé exactamente este objeto:
+{
+  "fecha": "DD/MM/YYYY",
+  "cuit": "número de CUIT del emisor (solo números, sin guiones)",
+  "proveedor": "razón social o nombre del proveedor",
+  "concepto": "descripción breve del concepto o null",
+  "tipoComprobante": "Fc A / Fc B / Fc C / etc",
+  "nroComprobante": "XXXX - XXXXXXXX (punto de venta - número)",
+  "neto": número o null,
+  "iva21": número o null,
+  "iva105": número o null,
+  "otros": número o null,
+  "percIva": número o null,
+  "percIibbBa": número o null,
+  "percIibbCaba": número o null,
+  "total": número o null,
+  "quien": null
+}
+
+Reglas:
+- Los montos son números sin signo pesos ni puntos de miles, con punto decimal
+- Si un campo no aparece en la factura, ponelo como null
+- El IVA 21% es el débito fiscal del 21%, el IVA 10.5% es el del 10.5%
+- Solo devolvé el JSON, nada más`;
+
+  try {
+    const res = await fetch(ANTHROPIC_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: imageBase64 } },
+            { type: 'text', text: prompt }
+          ]
+        }]
+      })
+    });
+
+    const data = await res.json();
+    const raw = data.content?.[0]?.text || '';
+    const clean = raw.replace(/```json|```/g, '').trim();
+    extractedData = JSON.parse(clean);
+
+    const fieldsHtml = `
+      <div class="fields-grid">
+        ${fieldHtml('FECHA EMISIÓN', 'fecha', false, false)}
+        ${fieldHtml('CUIT', 'cuit', true, false)}
+        ${fieldHtml('PROVEEDOR', 'proveedor', false, true)}
+        ${fieldHtml('CONCEPTO', 'concepto', false, false)}
+        ${fieldHtml('TIPO COMP.', 'tipoComprobante', false, false)}
+        ${fieldHtml('NRO. COMP.', 'nroComprobante', true, false)}
+        ${fieldHtml('NETO', 'neto', true, false)}
+        ${fieldHtml('IVA 21%', 'iva21', true, false)}
+        ${fieldHtml('IVA 10,5%', 'iva105', true, false)}
+        ${fieldHtml('OTROS', 'otros', true, false)}
+        ${fieldHtml('PERC. IVA', 'percIva', true, false)}
+        ${fieldHtml('PERC. IIBB BA', 'percIibbBa', true, false)}
+        ${fieldHtml('PERC. IIBB CABA', 'percIibbCaba', true, false)}
+        ${fieldHtml('TOTAL ARS', 'total', true, false)}
+        ${fieldHtml('QUIÉN', 'quien', false, false)}
+      </div>
+      <div style="margin-top:0.75rem;font-size:11px;color:var(--muted)">Podés editar cualquier campo antes de confirmar.</div>`;
+
+    showStatus('ok', '✓ DATOS EXTRAÍDOS', fieldsHtml);
+    confirmSection.style.display = 'block';
+
+  } catch(err) {
+    showStatus('err', 'ERROR AL LEER', `<div style="font-size:12px;color:var(--danger)">${err.message}</div><div style="font-size:11px;color:var(--muted);margin-top:4px">Verificá que la imagen sea legible e intentá de nuevo.</div>`);
+  }
+
+  btnAnalyze.innerHTML = 'Analizar factura con IA';
+  btnAnalyze.disabled = false;
+}
+
+async function sendToMake() {
+  const webhookUrl = document.getElementById('webhookUrl').value.trim();
+  if (!webhookUrl) { showToast('⚠ Pegá la URL del webhook de Make primero'); return; }
+
+  // Sync edited fields back to extractedData
+  document.querySelectorAll('.field-edit').forEach(input => {
+    const key = input.dataset.key;
+    const val = input.value.trim();
+    extractedData[key] = val === '' ? null : val;
+  });
+
+  const btnConfirm = document.getElementById('btnConfirm');
+  btnConfirm.disabled = true;
+  btnConfirm.innerHTML = '<div class="spinner"></div> Enviando a Excel...';
+
+  const payload = {
+    fecha: extractedData.fecha,
+    cuit: extractedData.cuit,
+    proveedor: extractedData.proveedor,
+    concepto: extractedData.concepto,
+    tipoComprobante: extractedData.tipoComprobante,
+    nroComprobante: extractedData.nroComprobante,
+    neto: extractedData.neto,
+    iva21: extractedData.iva21,
+    iva105: extractedData.iva105,
+    otros: extractedData.otros,
+    percIva: extractedData.percIva,
+    percIibbBa: extractedData.percIibbBa,
+    percIibbCaba: extractedData.percIibbCaba,
+    total: extractedData.total,
+    quien: extractedData.quien,
+    timestamp: new Date().toISOString()
+  };
+
+  try {
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      mode: 'no-cors'
+    });
+    showStatus('ok', '✓ ENVIADO A MAKE', `
+      <div style="font-size:12px;margin-bottom:0.5rem">La factura fue enviada correctamente al webhook.</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <span class="tag tag-ok">→ Compras 2026</span>
+        <span class="tag tag-ok">${extractedData.proveedor || ''}</span>
+        <span class="tag tag-ok">$ ${Number(extractedData.total||0).toLocaleString('es-AR')}</span>
+      </div>`);
+    confirmSection.style.display = 'none';
+    document.getElementById('btnAnalyze').disabled = true;
+    showToast('✓ Factura cargada exitosamente');
+    setTimeout(resetAll, 3500);
+  } catch(err) {
+    showStatus('err', 'ERROR AL ENVIAR', `<div style="font-size:12px;color:var(--danger)">${err.message}</div>`);
+    btnConfirm.disabled = false;
+    btnConfirm.innerHTML = '✓ Confirmar y enviar a Excel';
+  }
+}
+
+function resetAll() {
+  imageBase64 = null;
+  extractedData = null;
+  previewImg.style.display = 'none';
+  previewImg.src = '';
+  captureIcon.style.display = '';
+  captureLabel.style.display = '';
+  captureZone.classList.remove('has-image');
+  btnAnalyze.disabled = true;
+  btnAnalyze.innerHTML = 'Analizar factura con IA';
+  hideStatus();
+  confirmSection.style.display = 'none';
+  fileInput.value = '';
+  document.getElementById('btnConfirm').disabled = false;
+  document.getElementById('btnConfirm').innerHTML = '✓ Confirmar y enviar a Excel';
+}
+
+// Save webhook URL in localStorage
+const wh = document.getElementById('webhookUrl');
+const saved = localStorage.getItem('makeWebhookUrl');
+if (saved) wh.value = saved;
+wh.addEventListener('input', () => localStorage.setItem('makeWebhookUrl', wh.value));
+</script>
+</body>
+</html>
