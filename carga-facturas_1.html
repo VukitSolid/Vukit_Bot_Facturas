@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>Carga de Facturas</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #0f1117; --surface: #181c27; --surface2: #1e2333;
+    --border: rgba(255,255,255,0.08);
+    --accent: #4ade80; --accent-dim: rgba(74,222,128,0.12); --accent-border: rgba(74,222,128,0.3);
+    --text: #f0f2f5; --muted: #6b7280; --danger: #f87171; --info: #60a5fa;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; padding-bottom:2rem; }
+
+  header {
+    padding:1.25rem 1.25rem 1rem; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; gap:0.75rem;
+    position:sticky; top:0; background:var(--bg); z-index:10;
+  }
+  .logo { width:32px; height:32px; background:var(--accent-dim); border:1px solid var(--accent-border); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:16px; }
+  header h1 { font-size:15px; font-weight:600; }
+  header p  { font-size:11px; color:var(--muted); margin-top:1px; }
+
+  .webhook-bar { margin:1rem 1.25rem 0; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:0.75rem 1rem; }
+  .webhook-bar label { font-size:10px; color:var(--muted); font-family:'DM Mono',monospace; letter-spacing:0.05em; display:block; margin-bottom:4px; }
+  .webhook-bar input { width:100%; background:transparent; border:none; outline:none; font-size:12px; font-family:'DM Mono',monospace; color:var(--info); padding:0; }
+  .webhook-bar input::placeholder { color:var(--muted); }
+
+  .section { padding:1.25rem 1.25rem 0; }
+  .gap { height:0.75rem; }
+
+  .capture-zone {
+    background:var(--surface); border:2px dashed var(--border); border-radius:16px;
+    min-height:220px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:0.75rem; cursor:pointer; overflow:hidden; transition:border-color 0.2s,background 0.2s;
+  }
+  .capture-zone.has-image { border-style:solid; border-color:var(--accent-border); background:var(--surface2); }
+  .capture-zone img { width:100%; object-fit:contain; max-height:300px; border-radius:14px; }
+  .capture-icon { font-size:48px; opacity:0.35; }
+  .capture-label { font-size:13px; color:var(--muted); text-align:center; line-height:1.6; }
+  .capture-label strong { color:var(--text); font-weight:500; display:block; margin-bottom:2px; }
+  input[type=file] { display:none; }
+
+  .btn { display:flex; align-items:center; justify-content:center; gap:0.5rem; width:100%; padding:1rem; border-radius:12px; font-size:15px; font-weight:600; font-family:'DM Sans',sans-serif; cursor:pointer; border:none; transition:all 0.15s; }
+  .btn-primary { background:var(--accent); color:#0a1a0e; }
+  .btn-primary:active { transform:scale(0.97); }
+  .btn-primary:disabled { opacity:0.3; cursor:not-allowed; transform:none; }
+  .btn-secondary { background:var(--surface2); color:var(--muted); border:1px solid var(--border); font-size:13px; padding:0.75rem; }
+
+  .spinner { width:18px; height:18px; border:2px solid rgba(10,26,14,0.25); border-top-color:#0a1a0e; border-radius:50%; animation:spin 0.7s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  .result-card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:1rem 1.25rem; display:none; }
+  .result-card.visible { display:block; }
+  .result-card.ok  { border-color:var(--accent-border); background:var(--accent-dim); }
+  .result-card.err { border-color:rgba(248,113,113,0.3); background:rgba(248,113,113,0.08); }
+  .result-card.loading { border-color:rgba(96,165,250,0.3); background:rgba(96,165,250,0.08); }
+
+  .result-card h3 { font-size:11px; font-weight:600; letter-spacing:0.04em; margin-bottom:0.5rem; }
+  .result-card.ok h3 { color:var(--accent); }
+  .result-card.err h3 { color:var(--danger); }
+  .result-card.loading h3 { color:var(--info); }
+
+  .result-card p { font-size:13px; line-height:1.6; }
+  .result-card .big { font-size:18px; font-weight:600; margin:0.25rem 0; }
+  .result-card .sub { font-size:11px; color:var(--muted); }
+
+  .divider { height:1px; background:var(--border); margin:1.25rem 0 0; }
+
+  .instructions { background:var(--surface2); border-radius:12px; padding:1rem 1.125rem; font-size:12px; color:var(--muted); line-height:1.75; }
+  .instructions strong { color:var(--text); }
+  .instructions code { font-family:'DM Mono',monospace; font-size:10.5px; background:rgba(255,255,255,0.06); padding:1px 6px; border-radius:4px; color:var(--info); word-break:break-all; }
+  .step-row { display:flex; gap:8px; margin-bottom:0.5rem; }
+  .step-num { flex-shrink:0; width:18px; height:18px; background:var(--accent-dim); color:var(--accent); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:600; margin-top:2px; }
+  .section-title { font-size:11px; font-weight:600; color:var(--text); letter-spacing:0.04em; margin-bottom:0.6rem; }
+
+  .toast { position:fixed; bottom:1.5rem; left:50%; transform:translateX(-50%) translateY(100px); background:var(--text); color:var(--bg); padding:0.6rem 1.5rem; border-radius:24px; font-size:13px; font-weight:500; transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1); white-space:nowrap; z-index:100; }
+  .toast.show { transform:translateX(-50%) translateY(0); }
+
+  .prompt-box { background:rgba(0,0,0,0.3); border-radius:8px; padding:0.75rem; font-family:'DM Mono',monospace; font-size:10px; color:var(--muted); line-height:1.6; margin-top:0.5rem; white-space:pre-wrap; word-break:break-word; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🧾</div>
+  <div>
+    <h1>Carga de Facturas</h1>
+    <p>Foto → Make → Claude → Excel</p>
+  </div>
+</header>
+
+<div class="webhook-bar">
+  <label>WEBHOOK URL DE MAKE</label>
+  <input type="text" id="webhookUrl" placeholder="https://hook.us1.make.com/xxxx..." autocomplete="off" spellcheck="false"/>
+</div>
+
+<div class="section">
+  <div class="gap"></div>
+  <div class="capture-zone" id="captureZone" onclick="document.getElementById('fileInput').click()">
+    <div class="capture-icon" id="captureIcon">📷</div>
+    <div class="capture-label" id="captureLabel">
+      <strong>Sacar foto de la factura</strong>
+      o elegir desde la galería
+    </div>
+    <img id="previewImg" style="display:none"/>
+  </div>
+  <input type="file" id="fileInput" accept="image/*" capture="environment"/>
+
+  <div class="gap"></div>
+  <button class="btn btn-primary" id="btnEnviar" disabled onclick="enviarFactura()">
+    Enviar al Excel
+  </button>
+</div>
+
+<div class="section">
+  <div class="gap"></div>
+  <div class="result-card" id="resultCard">
+    <h3 id="resultTitle"></h3>
+    <div id="resultBody"></div>
+  </div>
+</div>
+
+<div class="section" id="btnNuevaSection" style="display:none">
+  <div class="gap"></div>
+  <button class="btn btn-secondary" onclick="resetAll()">+ Cargar otra factura</button>
+</div>
+
+<!-- Instrucciones Make -->
+<div class="section">
+  <div class="divider"></div>
+  <div class="gap"></div>
+  <div class="instructions">
+    <div class="section-title">CÓMO ARMAR EL ESCENARIO EN MAKE</div>
+
+    <div class="step-row"><span class="step-num">1</span><span><strong>Webhooks → Custom webhook</strong> — creá uno nuevo, copiá la URL y pegala arriba</span></div>
+
+    <div class="step-row"><span class="step-num">2</span><span><strong>HTTP → Make a request</strong> con estos datos:<br>
+    · URL: <code>https://api.anthropic.com/v1/messages</code><br>
+    · Método: <code>POST</code><br>
+    · Body type: <code>Raw</code> → <code>application/json</code></span></div>
+
+    <div class="step-row"><span class="step-num">3</span><span>Headers del módulo HTTP:<br>
+    · <code>x-api-key</code> → tu API key de Anthropic<br>
+    · <code>anthropic-version</code> → <code>2023-06-01</code><br>
+    · <code>content-type</code> → <code>application/json</code></span></div>
+
+    <div class="step-row"><span class="step-num">4</span><span>Body del módulo HTTP (copiá esto):
+    <div class="prompt-box">{
+  "model": "claude-opus-4-5",
+  "max_tokens": 1000,
+  "messages": [{
+    "role": "user",
+    "content": [
+      {
+        "type": "image",
+        "source": {
+          "type": "base64",
+          "media_type": "image/jpeg",
+          "data": "{{1.imagen}}"
+        }
+      },
+      {
+        "type": "text",
+        "text": "Extraé los datos de esta factura argentina en JSON puro sin markdown:\n{\"fecha\":\"DD/MM/YYYY\",\"cuit\":\"solo numeros\",\"proveedor\":\"nombre\",\"concepto\":\"descripcion o null\",\"tipoComprobante\":\"Fc A/B/C\",\"nroComprobante\":\"XXXX-XXXXXXXX\",\"neto\":numero,\"iva21\":numero,\"iva105\":numero,\"otros\":numero,\"percIva\":numero,\"percIibbBa\":numero,\"percIibbCaba\":numero,\"total\":numero,\"quien\":null}"
+      }
+    ]
+  }]
+}</div></span></div>
+
+    <div class="step-row"><span class="step-num">5</span><span><strong>Tools → JSON → Parse JSON</strong> — parseá <code>{{2.data.content[].text}}</code></span></div>
+
+    <div class="step-row"><span class="step-num">6</span><span><strong>Microsoft Excel 365 → Add a Worksheet Row</strong><br>
+    Seleccioná tu archivo → hoja <code>Compras 2026</code><br>
+    Mapeá: <code>{{3.fecha}}</code>, <code>{{3.cuit}}</code>, <code>{{3.proveedor}}</code>, etc.</span></div>
+  </div>
+  <div class="gap"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let imageBase64 = null;
+
+document.getElementById('fileInput').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const img = new Image();
+  const reader = new FileReader();
+  reader.onload = ev => {
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const MAX = 1200;
+      let w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+        else { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+      imageBase64 = dataUrl.split(',')[1];
+
+      const preview = document.getElementById('previewImg');
+      preview.src = dataUrl;
+      preview.style.display = 'block';
+      document.getElementById('captureIcon').style.display = 'none';
+      document.getElementById('captureLabel').style.display = 'none';
+      document.getElementById('captureZone').classList.add('has-image');
+      document.getElementById('btnEnviar').disabled = false;
+      hideResult();
+      document.getElementById('btnNuevaSection').style.display = 'none';
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function hideResult() {
+  const c = document.getElementById('resultCard');
+  c.className = 'result-card';
+  c.style.display = 'none';
+}
+
+function showResult(type, title, bodyHtml) {
+  const c = document.getElementById('resultCard');
+  c.className = `result-card visible ${type}`;
+  c.style.display = 'block';
+  document.getElementById('resultTitle').textContent = title;
+  document.getElementById('resultBody').innerHTML = bodyHtml;
+}
+
+async function enviarFactura() {
+  const webhookUrl = document.getElementById('webhookUrl').value.trim();
+  if (!webhookUrl) { showToast('⚠ Pegá la URL del webhook de Make'); return; }
+  if (!imageBase64) return;
+
+  const btn = document.getElementById('btnEnviar');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div> Procesando...';
+  hideResult();
+  document.getElementById('btnNuevaSection').style.display = 'none';
+  showResult('loading', 'ENVIANDO A MAKE...', '<p style="color:var(--info)">Make está leyendo la factura con Claude y guardando en Excel.<br>Puede tardar 20-30 segundos.</p>');
+
+  try {
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imagen: imageBase64 }),
+      mode: 'no-cors'
+    });
+
+    showResult('ok', '✓ ENVIADO', `
+      <p class="big">Factura procesada</p>
+      <p class="sub">Make está extrayendo los datos con Claude y escribiendo la fila en Excel. Revisá tu archivo en OneDrive en unos segundos.</p>`);
+    document.getElementById('btnNuevaSection').style.display = 'block';
+    showToast('✓ Enviado a Make');
+
+  } catch(err) {
+    showResult('err', 'ERROR AL ENVIAR', `<p style="color:var(--danger);font-size:13px">${err.message}</p>`);
+    btn.disabled = false;
+  }
+
+  btn.innerHTML = 'Enviar al Excel';
+  if (!document.getElementById('resultCard').classList.contains('err')) {
+    btn.disabled = true;
+  }
+}
+
+function resetAll() {
+  imageBase64 = null;
+  const preview = document.getElementById('previewImg');
+  preview.style.display = 'none'; preview.src = '';
+  document.getElementById('captureIcon').style.display = '';
+  document.getElementById('captureLabel').style.display = '';
+  document.getElementById('captureZone').classList.remove('has-image');
+  document.getElementById('btnEnviar').disabled = true;
+  document.getElementById('btnEnviar').innerHTML = 'Enviar al Excel';
+  document.getElementById('fileInput').value = '';
+  hideResult();
+  document.getElementById('btnNuevaSection').style.display = 'none';
+}
+
+const wh = document.getElementById('webhookUrl');
+try { if(localStorage.getItem('wh')) wh.value = localStorage.getItem('wh'); } catch{}
+wh.addEventListener('input', () => { try{localStorage.setItem('wh', wh.value);}catch{} });
+</script>
+</body>
+</html>
